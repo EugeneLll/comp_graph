@@ -2,8 +2,15 @@ import math
 import matplotlib.pyplot as plt
 import time
 
+# Кэш для хранения результатов проверок на вхождение точки в окружность
+circumcircle_cache = {}
+
 def is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
-    """Проверяет, находится ли точка (px, py) внутри описанной окружности треугольника (ax, ay), (bx, by), (cx, cy)."""
+    # Ключ для кэширования
+    key = tuple(sorted([(ax, ay), (bx, by), (cx, cy)]))  # Сортировка, чтобы ключ был независим от порядка
+    if key in circumcircle_cache:
+        return circumcircle_cache[key]
+
     matrix = [
         [ax - px, ay - py, (ax - px) ** 2 + (ay - py) ** 2],
         [bx - px, by - py, (bx - px) ** 2 + (by - py) ** 2],
@@ -14,10 +21,11 @@ def is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
         matrix[1][0] * (matrix[0][1] * matrix[2][2] - matrix[2][1] * matrix[0][2]) +
         matrix[2][0] * (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2])
     )
-    return determinant > 0
+    result = determinant > 0
+    circumcircle_cache[key] = result
+    return result
 
 def plot_triangulation(points, triangles, delay=0.5):
-    """Отображает текущую триангуляцию с использованием matplotlib."""
     plt.clf()
     for triangle in triangles:
         x = [triangle[0][0], triangle[1][0], triangle[2][0], triangle[0][0]]
