@@ -1,0 +1,105 @@
+import math
+import matplotlib.pyplot as plt
+import time
+
+def is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
+    """Проверяет, находится ли точка (px, py) внутри описанной окружности треугольника (ax, ay), (bx, by), (cx, cy)."""
+    matrix = [
+        [ax - px, ay - py, (ax - px) ** 2 + (ay - py) ** 2],
+        [bx - px, by - py, (bx - px) ** 2 + (by - py) ** 2],
+        [cx - px, cy - py, (cx - px) ** 2 + (cy - py) ** 2]
+    ]
+    determinant = (
+        matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[2][1] * matrix[1][2]) -
+        matrix[1][0] * (matrix[0][1] * matrix[2][2] - matrix[2][1] * matrix[0][2]) +
+        matrix[2][0] * (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2])
+    )
+    return determinant > 0
+
+def plot_triangulation(points, triangles, delay=0.5):
+    """Отображает текущую триангуляцию с использованием matplotlib."""
+    plt.clf()
+    for triangle in triangles:
+        x = [triangle[0][0], triangle[1][0], triangle[2][0], triangle[0][0]]
+        y = [triangle[0][1], triangle[1][1], triangle[2][1], triangle[0][1]]
+        plt.plot(x, y, 'b-')
+    x, y = zip(*points)
+    plt.plot(x, y, 'ro')
+    plt.pause(delay)
+
+def triangulate(points):
+    """Итеративный алгоритм триангуляции Делоне с динамическим кэшированием."""
+    # Построение супертреугольника, достаточно большого, чтобы покрыть все точки.
+    min_x = min(p[0] for p in points)
+    max_x = max(p[0] for p in points)
+    min_y = min(p[1] for p in points)
+    max_y = max(p[1] for p in points)
+
+    dx = max_x - min_x
+    dy = max_y - min_y
+    delta_max = max(dx, dy)
+
+    super_triangle = [
+        (min_x - delta_max, min_y - delta_max * 2),
+        (min_x + delta_max * 2, min_y - delta_max * 2),
+        (min_x + delta_max // 2, min_y + delta_max * 2)
+    ]
+
+    # Начальная триангуляция с супертреугольником.
+    triangles = [(super_triangle[0], super_triangle[1], super_triangle[2])]
+
+    plt.ion()
+    plot_triangulation(points, triangles, delay=1.0)
+
+    for point in points:
+        px, py = point
+        bad_triangles = []
+
+        # Найти все треугольники, для которых точка находится внутри описанной окружности.
+        for triangle in triangles:
+            ax, ay = triangle[0]
+            bx, by = triangle[1]
+            cx, cy = triangle[2]
+            if is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
+                bad_triangles.append(triangle)
+
+        # Найти границы (ребра) пустоты, образованной "плохими" треугольниками.
+        edges = []
+        for triangle in bad_triangles:
+            for edge in [(triangle[0], triangle[1]), (triangle[1], triangle[2]), (triangle[2], triangle[0])]:
+                if edges.count(edge) == 0 and edges.count((edge[1], edge[0])) == 0:
+                    edges.append(edge)
+                else:
+                    if edge in edges:
+                        edges.remove(edge)
+                    if (edge[1], edge[0]) in edges:
+                        edges.remove((edge[1], edge[0]))
+
+        # Удалить плохие треугольники.
+        triangles = [triangle for triangle in triangles if triangle not in bad_triangles]
+
+        # Создать новые треугольники, соединяющие точку с границами пустоты.
+        for edge in edges:
+            triangles.append((edge[0], edge[1], point))
+
+        # Отобразить текущую триангуляцию.
+        plot_triangulation(points, triangles)
+
+    # Удалить все треугольники, которые содержат вершины супертреугольника.
+    triangles = [
+        triangle for triangle in triangles
+        if super_triangle[0] not in triangle and super_triangle[1] not in triangle and super_triangle[2] not in triangle
+    ]
+
+    plot_triangulation(points, triangles, delay=1.0)
+    plt.ioff()
+    plt.show()
+
+    return triangles
+
+# Пример использования
+if __name__ == "__main__":
+    points = [(1, 1), (2, 3), (4, 2), (5, 5), (6, 3)]
+    result = triangulate(points)
+    for triangle in result:
+        print(triangle)
