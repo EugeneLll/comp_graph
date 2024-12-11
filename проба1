@@ -1,92 +1,100 @@
+import numpy as np
 import matplotlib.pyplot as plt
-import random
+import matplotlib.tri as tri
 
-def is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
-    """
-    Проверяет, лежит ли точка (px, py) внутри описанной окружности треугольника,
-    определяемого точками (ax, ay), (bx, by), (cx, cy).
-    """
-    matrix = [
-        [ax - px, ay - py, (ax - px) ** 2 + (ay - py) ** 2],
-        [bx - px, by - py, (bx - px) ** 2 + (by - py) ** 2],
-        [cx - px, cy - py, (cx - px) ** 2 + (cy - py) ** 2]
-    ]
-    determinant = (
-        matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[2][1] * matrix[1][2]) -
-        matrix[1][0] * (matrix[0][1] * matrix[2][2] - matrix[2][1] * matrix[0][2]) +
-        matrix[2][0] * (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2])
-    )
-    return determinant > 0
+import numpy as np
 
-def flip_edge(triangle1, triangle2, point):
+def is_delaunay(triangles, points):
     """
-    Выполняет поворот (flip) двух треугольников, образующих общую грань, с добавлением точки.
+    Проверяет, является ли текущая триангуляция Делоне.
+    
+    :param triangles: Список индексов треугольников
+    :param points: Список координат точек
+    :return: True, если триангуляция Делоне, иначе False
     """
-    a1, b1, c1 = triangle1
-    a2, b2, c2 = triangle2
+    for t in triangles:
+        # Получаем координаты вершин треугольника
+        p1, p2, p3 = points[t[0]], points[t[1]], points[t[2]]
+        
+        # Вычисляем центр и радиус описанной окружности треугольника
+        circumcenter, circumradius = circumcircle(p1, p2, p3)
+        
+        # Проверяем, что все другие точки не лежат внутри описанной окружности
+        for i, pt in enumerate(points):
+            if i not in t and np.linalg.norm(pt - circumcenter) < circumradius:
+                return False  # Если точка лежит внутри окружности, триангуляция не является Делоне
+    return True  # Все проверки пройдены, триангуляция является Делоне
 
-    # Если ребра между треугольниками совпадают, выполняем переворот
-    if b1 == b2:
-        return [(a1, c2, point), (a2, c1, point)]
-    elif a1 == a2:
-        return [(b1, c2, point), (b1, c1, point)]
-    elif c1 == c2:
-        return [(a1, b2, point), (a2, b1, point)]
-    return []
 
+def circumcircle(p1, p2, p3):
+    """
+    Вычисляет центр и радиус описанной окружности для треугольника, заданного точками p1, p2, p3.
+    
+    :param p1, p2, p3: Координаты вершин треугольника
+    :return: Центр окружности и её радиус
+    """
+    # Вычисляем детерминант для определения центра окружности
+    D = 2 * (p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1]))
+    
+    # Вычисляем координаты центра окружности (ux, uy)
+    ux = ((p1[0]**2 + p1[1]**2) * (p2[1] - p3[1]) + 
+          (p2[0]**2 + p2[1]**2) * (p3[1] - p1[1]) + 
+          (p3[0]**2 + p3[1]**2) * (p1[1] - p2[1])) / D
+          
+    uy = ((p1[0]**2 + p1[1]**2) * (p3[0] - p2[0]) + 
+          (p2[0]**2 + p2[1]**2) * (p1[0] - p3[0]) + 
+          (p3[0]**2 + p3[1]**2) * (p2[0] - p1[0])) / D
+    
+    # Центр окружности
+    circumcenter = np.array([ux, uy])
+    
+    # Радиус окружности (расстояние от центра до любой из вершин)
+    circumradius = np.linalg.norm(p1 - circumcenter)
+    
+    return circumcenter, circumradius
+
+
+# Поворот треугольников
+def flip(triangles, points, t):
+    p1, p2, p3 = points[t[0]], points[t[1]], points[t[2]]
+    for i in range(len(triangles)):
+        if i == t:
+            continue
+        t2 = triangles[i]
+        if (t[0] in t2 and t[1] in t2) or (t[1] in t2 and t[2] in t2) or (t[2] in t2 and t[0] in t2):
+            common = list(set(t) & set(t2))
+            common_point = list(set([t[0], t[1], t[2]]) - set(common))[0]
+            new_triangle1 = [common[0], common[1], common_point]
+            new_triangle2 = [common[1], common[2], common_point]
+            triangles[i] = new_triangle1
+            triangles.append(new_triangle2)
+            triangles.remove(t)
+            return True
+    return False
+
+# Начальная триангуляция
+def initial_triangulation(points):
+    tri_obj = tri.Triangulation(points[:,0], points[:,1])
+    return tri_obj.triangles.tolist()
+
+# Алгоритм Делоне
+def delaunay_algorithm(points):
+    triangles = initial_triangulation(points)
+    while not is_delaunay(triangles, points):
+        for t in triangles:
+            if not is_delaunay([t], points):
+                flip(triangles, points, t)
+                break
+    return triangles
+
+# Визуализация
 def plot_triangulation(points, triangles):
-    """Функция для отображения триангуляции."""
-    plt.figure(figsize=(8, 8))
-    for triangle in triangles:
-        x = [triangle[0][0], triangle[1][0], triangle[2][0], triangle[0][0]]
-        y = [triangle[0][1], triangle[1][1], triangle[2][1], triangle[0][1]]
-        plt.plot(x, y, 'b-', linewidth=1)
-    x, y = zip(*points)
-    plt.plot(x, y, 'ro', markersize=5)
-    plt.gca().set_aspect('equal', adjustable='box')
+    plt.figure(figsize=(8, 6))
+    plt.triplot(points[:,0], points[:,1], triangles, 'go-', lw=1)
+    plt.plot(points[:, 0], points[:, 1], 'bo', markersize=6)
     plt.show()
 
-def triangulate(points):
-    """Итеративный алгоритм триангуляции Делоне через повороты (flip)"""
-    triangles = []
-    # Начинаем с трех произвольных точек, которые точно не попадут в окружность новых точек
-    triangles.append([(0, 0), (10, 0), (5, 10)])  # Это начальный треугольник
-
-    for point in points:
-        px, py = point
-        bad_triangles = []
-        edges_to_flip = []
-
-        # Находим все "плохие" треугольники, чья окружность содержит точку
-        for triangle in triangles:
-            ax, ay = triangle[0]
-            bx, by = triangle[1]
-            cx, cy = triangle[2]
-            
-            if is_point_in_circumcircle(px, py, ax, ay, bx, by, cx, cy):
-                bad_triangles.append(triangle)
-                # Собираем ребра для возможного переворота
-                edges_to_flip.append((triangle[0], triangle[1], triangle[2]))
-
-        # Удаляем плохие треугольники
-        triangles = [t for t in triangles if t not in bad_triangles]
-
-        # Процесс переворота
-        for edge in edges_to_flip:
-            triangle1 = edge[:3]
-            triangle2 = edge[1:] + (point,)
-            new_triangles = flip_edge(triangle1, triangle2, point)
-            triangles.extend(new_triangles)  # Добавляем новые треугольники в список
-
-    # Возвращаем финальные треугольники (кроме начального)
-    return [t for t in triangles if (0, 0) not in t and (10, 0) not in t and (5, 10) not in t]
-
-# Генерация 10 случайных точек в пределах диапазона от (0, 0) до (10, 10)
-if __name__ == "__main__":
-    points = [(random.uniform(0, 10), random.uniform(0, 10)) for _ in range(10)]
-    print("Points:", points)  # Выводим сгенерированные точки для отладки
-    result = triangulate(points)  # Убираем лишнюю 'a'
-    plot_triangulation(points, result)
-    print("Final Triangles:")
-    for triangle in result:
-        print("Triangle:", triangle)
+# Пример
+points = np.random.rand(10, 2)  # случайные точки
+triangles = delaunay_algorithm(points)
+plot_triangulation(points, triangles)
