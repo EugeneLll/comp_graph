@@ -1,36 +1,9 @@
-import matplotlib.pyplot as plt
-import random
-import numpy as np
+import hashlib
 
-def check_point_in_circle(point, tri_vertex1, tri_vertex2, tri_vertex3):
-    """Проверяет, находится ли точка внутри окружности, описанной вокруг треугольника."""
-    x, y = point
-    ax, ay = tri_vertex1
-    bx, by = tri_vertex2
-    cx, cy = tri_vertex3
-
-    # Формируем матрицу для вычисления определителя
-    matrix = np.array([
-        [ax - x, ay - y, (ax - x) ** 2 + (ay - y) ** 2],
-        [bx - x, by - y, (bx - x) ** 2 + (by - y) ** 2],
-        [cx - x, cy - y, (cx - x) ** 2 + (cy - y) ** 2]
-    ])
-
-    det = np.linalg.det(matrix)
-    return det > 0
-
-def visualize(points, triangulation, final=False, pause=0.5):
-    """Показывает триангуляцию в реальном времени."""
-    plt.clf()
-    for tri in triangulation:
-        x_coords = [tri[0][0], tri[1][0], tri[2][0], tri[0][0]]
-        y_coords = [tri[0][1], tri[1][1], tri[2][1], tri[0][1]]
-        plt.plot(x_coords, y_coords, 'g-' if final else 'b-')
-    px, py = zip(*points)
-    plt.plot(px, py, 'ro')
-    if final:
-        plt.title("Результирующая триангуляция")
-    plt.pause(pause)
+def hash_triangle(triangle):
+    """Создает хэш для треугольника."""
+    triangle_str = f"{triangle[0]}-{triangle[1]}-{triangle[2]}"
+    return hashlib.sha256(triangle_str.encode()).hexdigest()
 
 def delaunay_triangulation(input_points):
     """Реализует алгоритм Делоне для множества точек."""
@@ -49,6 +22,7 @@ def delaunay_triangulation(input_points):
 
     # Инициализация с супертреугольником
     triangulation = [tuple(super_triangle)]
+    triangulation_hashes = {hash_triangle(super_triangle)}
 
     plt.ion()
     visualize(input_points, triangulation, pause=1.0)
@@ -75,7 +49,11 @@ def delaunay_triangulation(input_points):
 
         # Добавляем новые треугольники, образованные текущей точкой
         for edge in boundary_edges:
-            triangulation.append((edge[0], edge[1], current_point))
+            new_triangle = (edge[0], edge[1], current_point)
+            triangle_hash = hash_triangle(new_triangle)
+            if triangle_hash not in triangulation_hashes:
+                triangulation.append(new_triangle)
+                triangulation_hashes.add(triangle_hash)
 
         visualize(input_points, triangulation)
 
@@ -91,7 +69,6 @@ def delaunay_triangulation(input_points):
     plt.show()
 
     return final_triangulation
-
 # Тестовый пример
 if __name__ == "__main__":
     # Генерация случайных точек
